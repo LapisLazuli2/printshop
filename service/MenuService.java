@@ -12,6 +12,12 @@ import java.util.stream.Collectors;
 import com.google.gson.Gson;
 
 import pojo.InvoiceJson;
+import repository.CatalogueRepository;
+import repository.InvoiceRepository;
+import repository.OpeningTimeRepository;
+import repository.OrderRepository;
+import repository.ScheduleRepository;
+import repository.UserRepository;
 
 public class MenuService {
     public static CatalogueService catalogueService;
@@ -23,12 +29,12 @@ public class MenuService {
     private Scanner sc;
 
     public MenuService() {
-        catalogueService = new CatalogueService();
-        orderService = new OrderService();
-        openingTimesService = new OpeningTimesService();
-        scheduleService = new ScheduleService();
-        this.userService = new UserService();
-        this.invoiceService = new InvoiceService();
+        catalogueService = new CatalogueService(new CatalogueRepository());
+        orderService = new OrderService(new OrderRepository());
+        openingTimesService = new OpeningTimesService(new OpeningTimeRepository());
+        scheduleService = new ScheduleService(new ScheduleRepository());
+        this.userService = new UserService(new UserRepository());
+        this.invoiceService = new InvoiceService(new InvoiceRepository());
         this.sc = new Scanner(System.in);
         this.loadFiles();
     }
@@ -88,7 +94,7 @@ public class MenuService {
         switch (input) {
             case "add":
                 // Call the UI for adding an item to the order
-                orderService.promptAddItemToOrder();
+                orderService.promptAddItemToOrder(sc);
 
                 // Display the catalogue, shopping cart, and prompt the user for what to do next
                 System.out.println(catalogueService.displayCatalogue());
@@ -99,7 +105,7 @@ public class MenuService {
                 break;
             case "remove":
                 // Call the UI for removing an item from the order
-                orderService.promptRemoveItemFromOrder();
+                orderService.promptRemoveItemFromOrder(sc);
 
                 // Display the catalogue, shopping cart, and prompt the user for what to do next
                 System.out.println(catalogueService.displayCatalogue());
@@ -109,68 +115,13 @@ public class MenuService {
                 parseOrderUserInput(sc.nextLine());
                 break;
             case "checkout":
-                // Clear the terminal screen
-                clearScreen();
-                // Call the UI for the checkout process
-                // Fill in user information if user has not been created yet
-                if (userService.isUserCreated() == false) {
-                    userService.promptCreateNewUser();
-                }
-
-                // Create invoice with order and user info
-                invoiceService.createInvoice(orderService.retrieveOrder(), userService.retrieveUser());
-
-                // Notify the user from which day the printers are available again
-                // incase there have been previously placed orders
-                DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm");
-                System.out.println("---  Notice: the printers are next available from "
-                        + scheduleService.getNextAvailableTime().format(formatter) + " ---");
-
-                // Calculate how long the order will take to produce and pick up time
-                int productionTimeMinutes = orderService.retrieveOrderProductionTimeMinutes();
-                LocalDateTime pickUpDateTime = scheduleService.calculatePickUpTime(productionTimeMinutes);
-                invoiceService.setPickUpDateTime(pickUpDateTime);
-
-                // Display the invoice
-                System.out.println(invoiceService.displayInvoiceText());
-
-                // Confirmation for placing the order or changing order/user info
-                System.out.println("--- Confirmation ---");
-                System.out.println(
-                        "Available commands\nPlace order: confirm\nGo back to shop: shop\nChange personal info: info\nCancel order: exit");
-                System.out.print(">>");
-                confirmInvoice(sc.nextLine());
-
+                startCheckOutProcess();
                 break;
             case "review":
-                // Clear the terminal screen
-                clearScreen();
-
-                // Loop through all invoices in data/invoices, the jsons to strings,
-                // convert the strings to InvoiceJson objects, then print each invoice
-                System.out.println("--- Invoices ---");
-                File dir = new File("data/invoices");
-                File[] listOfFiles = dir.listFiles();
-                String filePath = "";
-                String jsonAsString = "";
-                for (File file : listOfFiles) {
-                    filePath = file.toString();
-                    Path path = Paths.get(filePath);
-                    try {
-                        jsonAsString = Files.lines(path)
-                                .map(line -> line.toString())
-                                .collect(Collectors.joining(""));
-                        Gson gson = new Gson();
-                        InvoiceJson invoiceJson = gson.fromJson(jsonAsString, InvoiceJson.class);
-                        System.out.println(invoiceJson);
-                    } catch (Exception e) {
-                        System.out.println(e);
-                    }
-                }
-
+                reviewPreviousOrders();
                 System.out.println("Press enter to return to the shop screen");
                 sc.nextLine();
-
+                
                 // Display catalogue, shopping cart, and prompt user for their choice
                 clearScreen();
                 System.out.println(orderService.displayIntroduction());
@@ -192,6 +143,68 @@ public class MenuService {
         }
     }
 
+    public void reviewPreviousOrders() {
+        // Clear the terminal screen
+        clearScreen();
+
+        // Loop through all invoices in data/invoices, the jsons to strings,
+        // convert the strings to InvoiceJson objects, then print each invoice
+        System.out.println("--- Invoices ---");
+        File dir = new File("data/invoices");
+        File[] listOfFiles = dir.listFiles();
+        String filePath = "";
+        String jsonAsString = "";
+        for (File file : listOfFiles) {
+            filePath = file.toString();
+            Path path = Paths.get(filePath);
+            try {
+                jsonAsString = Files.lines(path)
+                        .map(line -> line.toString())
+                        .collect(Collectors.joining(""));
+                Gson gson = new Gson();
+                InvoiceJson invoiceJson = gson.fromJson(jsonAsString, InvoiceJson.class);
+                System.out.println(invoiceJson);
+            } catch (Exception e) {
+                System.out.println(e);
+            }
+        }
+    }
+
+    public void startCheckOutProcess() {
+        // Clear the terminal screen
+        clearScreen();
+
+        // Call the UI for the checkout process
+        // Fill in user information if user has not been created yet
+        if (userService.isUserCreated() == false) {
+            userService.promptCreateNewUser(sc);
+        }
+
+        // Create invoice with order and user info
+        invoiceService.createInvoice(orderService.retrieveOrder(), userService.retrieveUser());
+
+        // Notify the user from which day the printers are available again
+        // incase there have been previously placed orders
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm");
+        System.out.println("---  Notice: the printers are next available from "
+                + scheduleService.getNextAvailableTime().format(formatter) + " ---");
+
+        // Calculate how long the order will take to produce and pick up time
+        int productionTimeMinutes = orderService.retrieveOrderProductionTimeMinutes();
+        LocalDateTime pickUpDateTime = scheduleService.calculatePickUpTime(productionTimeMinutes);
+        invoiceService.setPickUpDateTime(pickUpDateTime);
+
+        // Display the invoice
+        System.out.println(invoiceService.displayInvoiceText());
+
+        // Confirmation for placing the order or changing order/user info
+        System.out.println("--- Confirmation ---");
+        System.out.println(
+                "Available commands\nPlace order: confirm\nGo back to shop: shop\nChange personal info: info\nCancel order: exit");
+        System.out.print(">>");
+        confirmInvoice(sc.nextLine());
+    }
+
     /*
      * Function: confirmInvoice()
      * Input: a string containing the user's input retrieved from a Scanner
@@ -203,15 +216,16 @@ public class MenuService {
     public void confirmInvoice(String input) {
         switch (input) {
             case "confirm":
-                //Write the invoice to a json file
-                //Write the time for when the printers will be available again to Printshop_Schedule.csv
+                // Write the invoice to a json file
+                // Write the time for when the printers will be available again to
+                // Printshop_Schedule.csv
                 try {
                     invoiceService.writeInvoiceToJsonFile();
                     scheduleService.writeNextAvailableTimeToFile("data/Printshop_Schedule.csv");
                 } catch (Exception e) {
                     System.out.println(e);
                 }
-                
+
                 System.out.println("Thank you for shopping with us!");
                 break;
             case "shop":
@@ -228,7 +242,7 @@ public class MenuService {
                 // Clear the terminal screen
                 clearScreen();
                 // Overwrite user with new user info
-                userService.promptCreateNewUser();
+                userService.promptCreateNewUser(sc);
 
                 // Go back to checkout screen
                 parseOrderUserInput("checkout");

@@ -6,19 +6,19 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
 import java.util.List;
 
-import pojo.Catalogue;
 import pojo.Item;
+import repository.CatalogueRepository;
 
 public class CatalogueService {
-    private Catalogue catalogueService = new Catalogue();
+    private CatalogueRepository catalogueRepository;
 
     /*
      * Constructor
      */
-    public CatalogueService() {
+    public CatalogueService(CatalogueRepository catalogueRepository) {
+        this.catalogueRepository = catalogueRepository;
     }
 
     /*
@@ -27,7 +27,7 @@ public class CatalogueService {
      * Adds a copy of the given Item to the Catalogue object
      */
     public void addItem(Item item) {
-        this.catalogueService.addItem(new Item(item));
+        this.catalogueRepository.addItem(item);
     }
 
     /*
@@ -36,7 +36,7 @@ public class CatalogueService {
      * Returns a copy of the Item with the given item id
      */
     public Item retrieveItem(int id) {
-        return new Item(this.catalogueService.getItem(id));
+        return this.catalogueRepository.retrieveItem(id);
     }
 
     /*
@@ -44,11 +44,7 @@ public class CatalogueService {
      * Returns a List<Item> of all Item in the catalogueService
      */
     public List<Item> retrieveAllItem() {
-        List<Item> items = new ArrayList<>();
-        for (Item item : catalogueService) {
-            items.add(new Item(item));
-        }
-        return items;
+        return this.catalogueRepository.retrieveAllItem();
     }
 
     /*
@@ -57,7 +53,7 @@ public class CatalogueService {
      * Returns the size of the catalogue
      */
     public int retrieveCatalogueSize() {
-        return this.catalogueService.getSize();
+        return this.catalogueRepository.retrieveCatalogueSize();
     }
 
     /*
@@ -67,7 +63,7 @@ public class CatalogueService {
      */
     public String displayCatalogue() {
         String wholeCatalogue = "ID\tPrice\tProdTime\tName\n";
-        for (Item item : this.catalogueService) {
+        for (Item item : this.catalogueRepository.retrieveCatalogue()) {
             wholeCatalogue += item.getId() + "\t" + "$" + item.getPrice() + "\t" + item.getProductionTimeHours()
                     + "\t\t" + item.getName() + "\n";
         }

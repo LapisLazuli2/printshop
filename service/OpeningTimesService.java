@@ -8,16 +8,17 @@ import java.time.DayOfWeek;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 
-import pojo.OpeningTimes;
+import repository.OpeningTimeRepository;
 
 public class OpeningTimesService {
-    private OpeningTimes openingTimes;
+
+    private OpeningTimeRepository openingTimeRepository;
 
     /*
      * Constructor
      */
-    public OpeningTimesService() {
-        this.openingTimes = new OpeningTimes();
+    public OpeningTimesService(OpeningTimeRepository openingTimeRepository) {
+        this.openingTimeRepository = openingTimeRepository;
     }
 
     /*
@@ -27,7 +28,7 @@ public class OpeningTimesService {
      * Adds the day and shop start time and closing time to the openingTimes object
      */
     public void addOpeningTime(DayOfWeek day, LocalTime startTime, LocalTime closingTime) {
-        this.openingTimes.addOpeningTime(day, startTime, closingTime);
+        this.openingTimeRepository.addOpeningTime(day, startTime, closingTime);
     }
 
     /*
@@ -36,16 +37,16 @@ public class OpeningTimesService {
      * Returns the shop opening time for the given day of the week
      */
     public LocalTime getStartTime(DayOfWeek day) {
-        return this.openingTimes.getStartTime(day);
+        return this.openingTimeRepository.getStartTime(day);
     }
 
-     /*
+    /*
      * Function: getClosingTime()
      * Input: DayOfWeek
      * Returns the shop closing time for the given day of the week
      */
     public LocalTime getClosingTime(DayOfWeek day) {
-        return this.openingTimes.getClosingTime(day);
+        return this.openingTimeRepository.getClosingTime(day);
     }
 
     /*

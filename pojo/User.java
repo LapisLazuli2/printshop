@@ -21,6 +21,11 @@ public class User {
     }
 
     /*
+     * Empty constructor
+     */
+    public User(){}
+    
+    /*
      * Copy Constructor
      */
     public User(User source){

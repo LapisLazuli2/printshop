@@ -6,20 +6,22 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.DayOfWeek;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 
-import pojo.Schedule;
+import repository.ScheduleRepository;
 
 public class ScheduleService {
-    private Schedule schedule;
+
+    private ScheduleRepository scheduleRepository;
 
     /*
      * Constructor
      */
-    public ScheduleService() {
-        this.schedule = new Schedule();
+    public ScheduleService(ScheduleRepository scheduleRepository) {
+        this.scheduleRepository = scheduleRepository;
     }
 
     /*
@@ -27,7 +29,7 @@ public class ScheduleService {
      * Returns the nextAvailableTime from Schedule
      */
     public LocalDateTime getNextAvailableTime() {
-        return this.schedule.getNextAvailableTime();
+        return this.scheduleRepository.getNextAvailableTime();
     }
 
     /*
@@ -36,41 +38,7 @@ public class ScheduleService {
      * Sets the nextAvailableTime in Schedule
      */
     public void setNextAvailableTime(LocalDateTime dateTime) {
-        this.schedule.setNextAvailableTime(dateTime);
-    }
-
-    /*
-     * Function: isValidDateNextDay()
-     * Input: LocalDateTime
-     * Returns true if adding +1 day to the LocalDateTime produces a valid date,
-     * else false
-     * E.g. September 30 + 1 = September 31 -> false
-     * September 29 + 1 = September 30 -> true
-     */
-    public boolean isValidDateNextDay(LocalDateTime localDateTime) {
-        try {
-            localDateTime.withDayOfMonth(localDateTime.getDayOfMonth() + 1);
-            return true;
-        } catch (Exception e) {
-            return false;
-        }
-    }
-
-    /*
-     * Function: isValidDateNextMonth()
-     * Input: LocalDateTime
-     * Returns true if adding +1 month to the LocalDateTime produces a valid date,
-     * else false
-     * E.g. 12 (December) + 1 month = 13 (non-existant month) -> false
-     * 11 (November) + 1 month = 12 (December) -> true
-     */
-    public boolean isValidDateNextMonth(LocalDateTime localDateTime) {
-        try {
-            localDateTime.withMonth(localDateTime.getMonthValue() + 1);
-            return true;
-        } catch (Exception e) {
-            return false;
-        }
+        this.scheduleRepository.setNextAvailableTime(dateTime);
     }
 
     /*
@@ -122,144 +90,74 @@ public class ScheduleService {
         // If now is after the next available time, update the next available time to be
         // now
         // Otherwise the next available time is in the future, so leave it as is
-        if (now.isAfter(nextAvailableTime)) {
+        if (now.isAfter(nextAvailableTime))
             nextAvailableTime = now;
-        }
 
-        // Get day of week for nextAvailableTime
-        DayOfWeek day = nextAvailableTime.getDayOfWeek();
+        while (!isValidWorkingDateTime(nextAvailableTime))
+            nextAvailableTime = setValidWorkDateTime(nextAvailableTime);
+
+        return nextAvailableTime;
+    }
+
+    public boolean isValidWorkingDateTime(LocalDateTime dateTime) {
+        if (!isValidWorkingDate(dateTime.toLocalDate())
+                || !isValidWorkingTime(dateTime.toLocalTime(), dateTime.getDayOfWeek())) {
+            return false;
+        } else {
+            return true;
+        }
+    }
+
+    public boolean isValidWorkingDate(LocalDate date) {
+        // Within the OpeningHours csv days off are indicated by having a start time of
+        // 00:00 and closing time of 00:00. Thus this function checks if the date giving
+        // is a day off.
+
+        // Get day of week for date
+        DayOfWeek day = date.getDayOfWeek();
 
         // Get opening and closing times for that day
         LocalTime startTime = MenuService.openingTimesService.getStartTime(day);
         LocalTime closingTime = MenuService.openingTimesService.getClosingTime(day);
 
-        // Check if the hour of nextAvailableTime is past the hour of that working day's
-        // start time
-        // Examples: assume start time is 9:30 and closing time is 17:30
-        // if the hour of next available time is 8:00 -> less than starttime -> update
-        // nexttime to starttime
-        // 9:01 -> equal to starttime hour but less than starttime minute -> update the
-        // minutes of nexttime
-        // 9:31 -> equal to starttime hour but more than starttime minute -> leave as is
-        // 10:00 -> more than starttime -> this is fine, leave as is
-        // 17:00 -> more than starrtime, equal to endtime hour but less than endtime
-        // minute -> leave as is
-        // 17:31 -> more than starttime, equal to endtime hour and greater than endtime
-        // minute -> update nexttime to next working day with that day's starttime
-        // 20:00 -> more than starttime and more than endtime -> update nexttime to next
-        // working day with that day's starttime
-        if (nextAvailableTime.getHour() < startTime.getHour()) {
-            // The time now is before the opening time, so update the next available time to
-            // be at the opening hour
-            nextAvailableTime = nextAvailableTime.withHour(startTime.getHour());
-            nextAvailableTime = nextAvailableTime.withMinute(startTime.getMinute());
-        } else if ((nextAvailableTime.getHour() == startTime.getHour()
-                && nextAvailableTime.getMinute() < startTime.getMinute())) {
-            // The time now is the same hour as opening time but the minutes are before
-            // opening time,
-            // so update the minutes of available time to the minutes of the opening time
-            nextAvailableTime = nextAvailableTime.withMinute(startTime.getMinute());
-        } else if (nextAvailableTime.getHour() == closingTime.getHour()
-                && nextAvailableTime.getMinute() >= closingTime.getMinute()) {
-            // Change next available time to next day
-            // Check if next day is valid date
-            // Check if adding +1 day to the nextAvailable time produces an invalid day
-            // (September 31)
-            // or invalid month (Month #13), then update nextAvailable time to a valid day
-            // and month
-            if (MenuService.scheduleService.isValidDateNextDay(nextAvailableTime)) {
-                nextAvailableTime = nextAvailableTime.withDayOfMonth(nextAvailableTime.getDayOfMonth() + 1);
-            } else {
-                if (MenuService.scheduleService.isValidDateNextMonth(nextAvailableTime)) {
-                    nextAvailableTime = nextAvailableTime.withMonth(nextAvailableTime.getMonthValue() + 1);
-                    nextAvailableTime = nextAvailableTime.withDayOfMonth(1);
-                } else {
-                    nextAvailableTime = nextAvailableTime.withYear(nextAvailableTime.getYear() + 1);
-                    nextAvailableTime = nextAvailableTime.withMonth(1);
-                    nextAvailableTime = nextAvailableTime.withDayOfMonth(1);
-                }
-            }
-
-            // nextAvailableTime =
-            // nextAvailableTime.withDayOfMonth(nextAvailableTime.getDayOfMonth() + 1);
-            // Change next available time hours and minutes to the starting time of of next
-            // day
-            day = nextAvailableTime.getDayOfWeek();
-            startTime = MenuService.openingTimesService.getStartTime(day);
-            nextAvailableTime = nextAvailableTime.withHour(startTime.getHour());
-            nextAvailableTime = nextAvailableTime.withMinute(startTime.getMinute());
-        } else if (nextAvailableTime.getHour() > closingTime.getHour()) {
-            // Change next available time to next day
-            // Check if next day is valid date
-            // Check if adding +1 day to the nextAvailable time produces an invalid day
-            // (September 31)
-            // or invalid month (Month #13), then update nextAvailable time to a valid day
-            // and month
-            if (MenuService.scheduleService.isValidDateNextDay(nextAvailableTime)) {
-                nextAvailableTime = nextAvailableTime.withDayOfMonth(nextAvailableTime.getDayOfMonth() + 1);
-            } else {
-                if (MenuService.scheduleService.isValidDateNextMonth(nextAvailableTime)) {
-                    nextAvailableTime = nextAvailableTime.withMonth(nextAvailableTime.getMonthValue() + 1);
-                    nextAvailableTime = nextAvailableTime.withDayOfMonth(1);
-                } else {
-                    nextAvailableTime = nextAvailableTime.withYear(nextAvailableTime.getYear() + 1);
-                    nextAvailableTime = nextAvailableTime.withMonth(1);
-                    nextAvailableTime = nextAvailableTime.withDayOfMonth(1);
-                }
-            }
-
-            // Change next available time hours and minutes to the starting time of of next
-            // day
-            day = nextAvailableTime.getDayOfWeek();
-            startTime = MenuService.openingTimesService.getStartTime(day);
-            nextAvailableTime = nextAvailableTime.withHour(startTime.getHour());
-            nextAvailableTime = nextAvailableTime.withMinute(startTime.getMinute());
-        }
-
-        // Within the csv days off are indicated by having a start time of 00:00 and
-        // closing time of 00:00. So check if the next available time was updated
-        // to a day off, and then updates it to the next day if so
-
-        // Get day of week for nextAvailableTime
-        day = nextAvailableTime.getDayOfWeek();
-
-        // Get opening and closing times for that day
-        startTime = MenuService.openingTimesService.getStartTime(day);
-        closingTime = MenuService.openingTimesService.getClosingTime(day);
-
         // Check if that day is a day off
-        if (nextAvailableTime.getHour() == startTime.getHour()
-                && nextAvailableTime.getHour() == closingTime.getHour()
-                && nextAvailableTime.getMinute() == startTime.getMinute()
-                && nextAvailableTime.getMinute() == closingTime.getMinute()) {
-            // Change next available time to next day
-            // Check if next day is valid date
-            // Check if adding +1 day to the nextAvailable time produces an invalid day
-            // (September 31)
-            // or invalid month (Month #13), then update nextAvailable time to a valid day
-            // and month
-            if (MenuService.scheduleService.isValidDateNextDay(nextAvailableTime)) {
-                nextAvailableTime = nextAvailableTime.withDayOfMonth(nextAvailableTime.getDayOfMonth() + 1);
-            } else {
-                if (MenuService.scheduleService.isValidDateNextMonth(nextAvailableTime)) {
-                    nextAvailableTime = nextAvailableTime.withMonth(nextAvailableTime.getMonthValue() + 1);
-                    nextAvailableTime = nextAvailableTime.withDayOfMonth(1);
-                } else {
-                    nextAvailableTime = nextAvailableTime.withYear(nextAvailableTime.getYear() + 1);
-                    nextAvailableTime = nextAvailableTime.withMonth(1);
-                    nextAvailableTime = nextAvailableTime.withDayOfMonth(1);
-                }
-            }
+        if (startTime.getHour() == 0 && startTime.getMinute() == 0
+                && closingTime.getHour() == 0 && closingTime.getMinute() == 0)
+            return false;
+        else
+            return true;
+    }
 
-            // Change next available time hours and minutes to the starting time of of next
-            // day
-            day = nextAvailableTime.getDayOfWeek();
-            startTime = MenuService.openingTimesService.getStartTime(day);
-            nextAvailableTime = nextAvailableTime.withHour(startTime.getHour());
-            nextAvailableTime = nextAvailableTime.withMinute(startTime.getMinute());
+    public boolean isValidWorkingTime(LocalTime time, DayOfWeek day) {
+        LocalTime startTime = MenuService.openingTimesService.getStartTime(day);
+        LocalTime closingTime = MenuService.openingTimesService.getClosingTime(day);
+
+        // invalid opening times are time < opening time or time >= closing time
+        if (time.isBefore(startTime) || time.isAfter(closingTime) || time.equals(closingTime))
+            return false;
+        else
+            return true;
+    }
+
+    public LocalDateTime setValidWorkDateTime(LocalDateTime dateTime) {
+        // Input: a dateTime is that is not valid according to isValidWorkingDateTime()
+        // Implication: the dateTime's time is either before the opening time of the
+        // shop, after the closing time, or the date is on a day off
+        // Cases: time before starting time -> move to starting time
+        // time after end time -> move to next day
+        // day off -> move to next day
+        LocalTime startTime = MenuService.openingTimesService.getStartTime(dateTime.getDayOfWeek());
+        if (dateTime.toLocalTime().isBefore(startTime)) {
+            // dateTime with startime of current day
+            dateTime = dateTime.withHour(startTime.getHour()).withMinute(startTime.getMinute());
+            return dateTime;
+        } else {
+            // return datetime on next day and with start time of that day
+            dateTime = dateTime.plusDays(1);
+            startTime = MenuService.openingTimesService.getStartTime(dateTime.getDayOfWeek());
+            dateTime = dateTime.withHour(startTime.getHour()).withMinute(startTime.getMinute());
+            return dateTime;
         }
-
-        return nextAvailableTime;
     }
 
     /*

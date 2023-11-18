@@ -14,14 +14,17 @@ import pojo.InvoiceJson;
 import pojo.Item;
 import pojo.Order;
 import pojo.User;
+import repository.InvoiceRepository;
 
 public class InvoiceService {
-    private Invoice invoice;
+
+    private InvoiceRepository invoiceRepository;
 
     /*
      * Constructor
      */
-    public InvoiceService() {
+    public InvoiceService(InvoiceRepository invoiceRepository) {
+        this.invoiceRepository = invoiceRepository;
     }
 
     /*
@@ -30,7 +33,7 @@ public class InvoiceService {
      * Initializes this.invoice with the order and user information
      */
     public void createInvoice(Order order, User user) {
-        this.invoice = new Invoice(order, user);
+        this.invoiceRepository.createInvoice(order, user);
     }
 
     /*
@@ -38,7 +41,7 @@ public class InvoiceService {
      * Returns a copy of this.invoice
      */
     public Invoice retrieveInvoice() {
-        return new Invoice(this.invoice);
+        return this.invoiceRepository.retrieveInvoice();
     }
 
     /*
@@ -47,7 +50,7 @@ public class InvoiceService {
      * picked up
      */
     public void setPickUpDateTime(LocalDateTime pickUpDateTime) {
-        this.invoice.setPickUpDateTime(pickUpDateTime);
+        this.invoiceRepository.setPickUpDateTime(pickUpDateTime);
     }
 
     /*
@@ -58,14 +61,15 @@ public class InvoiceService {
     public void writeInvoiceToJsonFile() throws IOException {
         // Create new file with the name in yyyymmddhhmm.json format where the name
         // is based on the pick up datetime of the invoice
+        Invoice invoice = this.invoiceRepository.retrieveInvoice();
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyyMMddhhmm");
-        String fileName = "data/invoices/" + this.invoice.getPickUpDateTime().format(formatter) + ".json";
+        String fileName = "data/invoices/" + invoice.getPickUpDateTime().format(formatter) + ".json";
         File file = new File(fileName);
         file.createNewFile();
 
         //Convert Invoice to an InvoiceJson object that replaces all LocalDateTime fields with String fields,
         //due to gson throwing errors when converting LocalDatetime fields to json
-        InvoiceJson invoiceJson = new InvoiceJson(this.invoice);
+        InvoiceJson invoiceJson = new InvoiceJson(invoice);
         
         //Convert InvoiceJson to a json object and write it to the file
         Gson gson = new Gson();
@@ -81,27 +85,39 @@ public class InvoiceService {
      * info, total price to pay, and pickup time.
      */
     public String displayInvoiceText() {
+        Invoice invoice = this.invoiceRepository.retrieveInvoice();
+
+        //Header
         String invoiceText = "--- Invoice ---\n";
-        LocalDateTime completionDateTime = this.invoice.getCompletionTime();
+
+        //Completion time
+        LocalDateTime completionDateTime = invoice.getCompletionTime();
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm");
         invoiceText += "Order placed at: " + completionDateTime.format(formatter) + "\n";
-        String productionTime = "Production time: " + this.invoice.getOrder().getProductionTimeHours() + " hours"
+
+        //Production time
+        String productionTime = "Production time: " + invoice.getOrder().getProductionTimeHours() + " hours"
                 + "\n";
         invoiceText += productionTime;
-        LocalDateTime pickUpDateTime = this.invoice.getPickUpDateTime();
-        invoiceText += "Order Pick Up Time: " + pickUpDateTime.format(formatter) + "\n";
-        String customerInformation = "-- Customer Information --\n";
-        customerInformation += this.invoice.getUser().getFirstName() + " " + this.invoice.getUser().getLastName() +
-                "\n" + this.invoice.getUser().getAddress() + ", " + this.invoice.getUser().getPostcode() + "\n" +
-                this.invoice.getUser().getPhoneNumber() + "\n" + this.invoice.getUser().getEmail() + "\n";
-        String orderInformation = "-- Order --\nQuantity\tSubtotal\tItem\n";
 
-        for (Map.Entry<Item, Integer> set : this.invoice.getOrder().getOrder().entrySet()) {
+        //Pickup time
+        LocalDateTime pickUpDateTime = invoice.getPickUpDateTime();
+        invoiceText += "Order Pick Up Time: " + pickUpDateTime.format(formatter) + "\n";
+
+        //Customer information
+        String customerInformation = "-- Customer Information --\n";
+        customerInformation += invoice.getUser().getFirstName() + " " + invoice.getUser().getLastName() +
+                "\n" + invoice.getUser().getAddress() + ", " + invoice.getUser().getPostcode() + "\n" +
+                invoice.getUser().getPhoneNumber() + "\n" + invoice.getUser().getEmail() + "\n";
+
+        //Order information
+        String orderInformation = "-- Order --\nQuantity\tSubtotal\tItem\n";
+        for (Map.Entry<Item, Integer> set : invoice.getOrder().getOrder().entrySet()) {
             orderInformation += set.getValue() + "x\t\t" + "$" + (set.getKey().getPrice() * set.getValue()) +
                     "\t\t" + set.getKey().getName() + "\n";
         }
-
-        orderInformation += "Total: $" + this.invoice.getOrder().getTotal();
+        orderInformation += "Total: $" + invoice.getOrder().getTotal();
+        
         return invoiceText + customerInformation + orderInformation;
     }
 }

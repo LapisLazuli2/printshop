@@ -4,36 +4,37 @@ import java.util.Scanner;
 
 import pojo.Item;
 import pojo.Order;
+import repository.OrderRepository;
 
 public class OrderService {
-    private Order order; //contains the items with their specified quantities that the user adds to the order
-    private String shoppingCart; //a string containing the shopping cart information based on the current items in the order
-    private Scanner sc;
     
+    private OrderRepository orderRepository;
+    private String shoppingCart; // a string containing the shopping cart information based on the current items
+                                 // in the order
+
     /*
      * Constructor
      */
-    public OrderService() {
-        this.order = new Order();
-        this.sc = new Scanner(System.in);
+    public OrderService(OrderRepository orderRepository) {
+        this.orderRepository = orderRepository;
     }
 
     /*
      * Function: retrieveOrder()
      * Returns a copy of this.order
      */
-    public Order retrieveOrder(){
-        return new Order(this.order);
+    public Order retrieveOrder() {
+        return this.orderRepository.retrieveOrder();
     }
-    
+
     /*
      * Function: retrieveOrderProductionTimeMinutes()
      * Returns how many minutes it takes to produce all the items in the order
      */
-    public int retrieveOrderProductionTimeMinutes(){
-        return this.order.getProductionTimeMinutes();
+    public int retrieveOrderProductionTimeMinutes() {
+        return this.orderRepository.retrieveOrderProductionTimeMinutes();
     }
-    
+
     /*
      * Function: displayIntroduction()
      * returns a string introducing the user to the store
@@ -54,14 +55,17 @@ public class OrderService {
 
     /*
      * Function: displayShoppingCart()
-     * Updates the shoppingCart string with the information of the items currently in the order and returns that string
+     * Updates the shoppingCart string with the information of the items currently
+     * in the order and returns that string
      */
     public String displayShoppingCart() {
         this.shoppingCart = "--- Shopping Cart ---\nQuantity\tSubtotal\tID\tItem\n";
-        this.order.getOrder().forEach((Item item, Integer quantity) -> {
-            this.shoppingCart += quantity + "x\t\t" + "$" + (item.getPrice() * quantity) + "\t\t" + item.getId() + "\t" + item.getName()+ "\n";
+        Order order = this.orderRepository.retrieveOrder();
+        order.getOrder().forEach((Item item, Integer quantity) -> {
+            this.shoppingCart += quantity + "x\t\t" + "$" + (item.getPrice() * quantity) + "\t\t" + item.getId() + "\t"
+                    + item.getName() + "\n";
         });
-        this.shoppingCart += "Total: " + "$" + this.order.getTotal();
+        this.shoppingCart += "Total: " + "$" + order.getTotal();
         return this.shoppingCart;
     }
 
@@ -71,8 +75,7 @@ public class OrderService {
      * For the given item adds the specified quantity to the order
      */
     public void addItemToOrder(Item item, int quantity) {
-        Item copy = new Item(item);
-        this.order.changeQuantity(copy, quantity);
+        this.orderRepository.addItemToOrder(item, quantity);
     }
 
     /*
@@ -81,44 +84,68 @@ public class OrderService {
      * For the given item removes the specified quantity to the order
      */
     public void removeItemFromOrder(Item item, int quantity) {
-        Item copy = new Item(item);
-        this.order.changeQuantity(copy, quantity);
+        this.orderRepository.removeItemFromOrder(item, quantity);
     }
 
     /*
      * Function: promptAddItemToOrder()
-     * Prompts the user for an item id and a quantity, and then adds that amount of
-     * the item to the order.
+     * Prompts the user for an item id and a quantity, and then adds that amount
+     * of the item to the order.
      */
-    public void promptAddItemToOrder() {
+    public void promptAddItemToOrder(Scanner sc) {
         System.out.println("---------");
+
+        String itemId = promptItemId(sc);
+        String itemQuantity = promptItemQuantity(sc);
+
+        MenuService.orderService.addItemToOrder(
+                MenuService.catalogueService.retrieveItem(Integer.parseInt(itemId) - 1),
+                Integer.parseInt(itemQuantity));
+
+        // Clear the terminal screen
+        MenuService.clearScreen();
+    }
+
+    public String promptItemId(Scanner sc) {
         System.out.print("Enter the id for the item you want to order: ");
         String itemId = sc.nextLine();
+        if (!isValidItemId(itemId))
+            itemId = promptItemId(sc);
+        return itemId;
+    }
+
+    public boolean isValidItemId(String itemId) {
         // Check if itemId is an integer and a valid itemId (0 < itemId < catalogueSize)
         if (!isInteger(itemId) || Integer.parseInt(itemId) > MenuService.catalogueService.retrieveCatalogueSize()
                 || Integer.parseInt(itemId) < 1) {
-            System.out.println("--- Please enter a valid item id and a valid quantity ---");
-            promptAddItemToOrder();
-            return;
+            System.out.println("--- Please enter a valid item id ---");
+            return false;
+        } else {
+            return true;
         }
+    }
 
+    public String promptItemQuantity(Scanner sc) {
         System.out.print("Quantity: ");
         String itemQuantity = sc.nextLine();
+        if (!isValidItemQuantity(itemQuantity))
+            itemQuantity = promptItemQuantity(sc);
+        return itemQuantity;
+    }
+
+    public boolean isValidItemQuantity(String itemQuantity) {
         // Check if itemQuantity is an int and greater than 0
         if (!isInteger(itemQuantity) || Integer.parseInt(itemQuantity) < 1) {
-            System.out.println("--- Please enter a valid item id and a valid quantity ---");
-            promptAddItemToOrder();
+            System.out.println("--- Please enter a valid quantity ---");
+            return false;
         } else {
-            if (Integer.parseInt(itemQuantity) > 100) {
-                System.out.println(
-                        "--- For orders exceeding quantities of 100 units please contact customer support due to limited printer availability ---");
-                promptAddItemToOrder();
-                return;
-            }
-            MenuService.orderService.addItemToOrder(MenuService.catalogueService.retrieveItem(Integer.parseInt(itemId) - 1),
-                    Integer.parseInt(itemQuantity));
-            // Clear the terminal screen
-            MenuService.clearScreen();
+            // if (Integer.parseInt(itemQuantity) > 100) {
+            // System.out.println(
+            // "--- For orders exceeding quantities of 100 units please contact customer
+            // support due to limited printer availability ---");
+            // return false;
+            // }
+            return true;
         }
     }
 
@@ -130,29 +157,34 @@ public class OrderService {
      * just removes the item
      * completely from the shopping cart
      */
-    public void promptRemoveItemFromOrder() {
+    public void promptRemoveItemFromOrder(Scanner sc) {
         System.out.println("---------");
+
+        String itemId = promptRemoveItemId(sc);
+        String itemQuantity = promptRemoveItemQuantity(sc);
+
+        MenuService.orderService.removeItemFromOrder(
+                MenuService.catalogueService.retrieveItem(Integer.parseInt(itemId) - 1),
+                -Integer.parseInt(itemQuantity));
+        System.out.println("---------");
+        // Clear the terminal screen
+        MenuService.clearScreen();
+    }
+
+    public String promptRemoveItemId(Scanner sc) {
         System.out.print("Enter the id for the item you want to remove: ");
         String itemId = sc.nextLine();
-        //Check if itemId is an integer and a valid itemId (0 < itemId < catalogueSize)
-        if (!isInteger(itemId) || Integer.parseInt(itemId) > MenuService.catalogueService.retrieveCatalogueSize() || Integer.parseInt(itemId) < 1) {
-            System.out.println("--- Please enter a valid item id and a valid quantity ---");
-            promptRemoveItemFromOrder();
-            return;
-        }
+        if (!isValidItemId(itemId))
+            itemId = promptRemoveItemId(sc);
+        return itemId;
+    }
 
+    public String promptRemoveItemQuantity(Scanner sc) {
         System.out.print("Quantity to remove: ");
         String itemQuantity = sc.nextLine();
-        //Check if itemQuantity is an int and greater or equal to 0
-        if (!isInteger(itemQuantity) || Integer.parseInt(itemQuantity) < 0) {
-            System.out.println("--- Please enter a valid item id and a valid quantity to remove ---");
-            promptRemoveItemFromOrder();
-        } else {
-            MenuService.orderService.removeItemFromOrder(MenuService.catalogueService.retrieveItem(Integer.parseInt(itemId) - 1), -Integer.parseInt(itemQuantity));
-            System.out.println("---------");
-            // Clear the terminal screen
-            MenuService.clearScreen();            
-        }
+        if (!isValidItemQuantity(itemQuantity))
+            itemQuantity = promptRemoveItemQuantity(sc);
+        return itemQuantity;
     }
 
     /*
@@ -162,10 +194,9 @@ public class OrderService {
      */
     public static boolean isInteger(String input) {
         try {
-            Integer.parseInt( input );
+            Integer.parseInt(input);
             return true;
-        }
-        catch( Exception e ) {
+        } catch (Exception e) {
             return false;
         }
     }

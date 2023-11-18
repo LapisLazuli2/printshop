@@ -14,6 +14,16 @@ public class Catalogue implements Iterable<Item> {
     }
 
     /*
+     * Copy constructor
+     */
+    public Catalogue(Catalogue source){
+        this.catalogue = new ArrayList<Item>();
+        for (Item item : source) {
+            this.addItem(item);
+        }
+    }
+
+    /*
      * Function: addItem()
      * Input: Item
      * Adds a copy of the given item to catalogue
